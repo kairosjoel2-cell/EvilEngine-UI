@@ -307,11 +307,12 @@
       currentUser = session?.user || null;
       updateAccountUI();
       if (currentUser) await loadConversations();
-      supabase.auth.onAuthStateChange(async (_event, sessionNow) => {
+      supabase.auth.onAuthStateChange((_event, sessionNow) => {
         currentUser = sessionNow?.user || null;
         updateAccountUI();
-        if (currentUser) await loadConversations();
-        else {
+        if (currentUser) {
+          window.setTimeout(() => loadConversations(), 0);
+        } else {
           conversations = [];
           currentConversation = null;
           messages = [];
