@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-app = FastAPI(title="EvilEngine FullStack", version="1.1.0")
+app = FastAPI(title="Kairos GPT", version="2.0.0")
 
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_URL = (
@@ -17,14 +17,41 @@ GEMINI_URL = (
 
 
 class PromptRequest(BaseModel):
-    prompt: str
+    prompt: str | None = None
+    messages: list[dict] | None = None
+
+
+@app.get("/api/config")
+def public_config():
+    # These are public browser credentials; row-level security protects user data.
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_ANON_KEY") or os.getenv("SUPABASE_PUBLISHABLE_KEY")
+    if not supabase_url or not supabase_key:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
+    return {"supabaseUrl": supabase_url, "supabaseAnonKey": supabase_key}
 
 
 @app.post("/api/generate")
 def generate(payload: PromptRequest):
-    prompt = payload.prompt.strip()
-    if not prompt:
-        raise HTTPException(status_code=400, detail="Please enter a prompt.")
+    if payload.messages:
+        contents = []
+        for message in payload.messages[-20:]:
+            role = message.get("role")
+            text = str(message.get("content", "")).strip()
+            if not text or role not in ("user", "assistant", "model"):
+                continue
+            contents.append({
+                "role": "model" if role in ("assistant", "model") else "user",
+                "parts": [{"text": text}],
+            })
+    else:
+        prompt = (payload.prompt or "").strip()
+        if not prompt:
+            raise HTTPException(status_code=400, detail="Please enter a prompt.")
+        contents = [{"role": "user", "parts": [{"text": prompt}]}]
+
+    if not contents or contents[-1]["role"] != "user":
+        raise HTTPException(status_code=400, detail="Please enter a message.")
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
@@ -34,7 +61,7 @@ def generate(payload: PromptRequest):
         )
 
     body = json.dumps({
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "contents": contents,
         "generationConfig": {"temperature": 0.7, "maxOutputTokens": 2048},
     }).encode("utf-8")
 
@@ -52,7 +79,6 @@ def generate(payload: PromptRequest):
         with urlopen(request, timeout=55) as response:
             result = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
-        # Keep provider details and credentials out of the public response.
         if error.code == 429:
             raise HTTPException(
                 status_code=429,
