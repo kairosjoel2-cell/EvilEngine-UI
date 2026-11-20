@@ -52,7 +52,7 @@
     $("top-profile").classList.toggle("hidden", !signedIn);
     $("signin-note").classList.toggle("hidden", signedIn);
     $("account-name").textContent = signedIn ? (currentUser.email || "Your account") : "Guest";
-    $("account-status").textContent = signedIn ? "Signed in" : "Not signed in";
+    $("account-status").textContent = signedIn ? "Signed in · Chats synced" : "Guest mode · Not synced";
     const initial = signedIn ? (currentUser.email || "K").charAt(0).toUpperCase() : "G";
     $("user-avatar").textContent = initial;
     $("top-avatar").textContent = initial;
@@ -198,11 +198,7 @@
   async function sendPrompt(value) {
     const prompt = (value ?? input.value).trim();
     if (!prompt || busy) return;
-    if (!currentUser) {
-      openAuth("signin");
-      setAuthMessage("Sign in to start and save your conversations.");
-      return;
-    }
+    // Guest users can chat immediately. Only signed-in users have cloud-saved history.
     messages.push({ role: "user", content: prompt });
     input.value = "";
     input.style.height = "auto";
@@ -294,7 +290,7 @@
 
   async function init() {
     updateAccountUI();
-    $("composer-hint").textContent = "AI can make mistakes. Check important information.";
+    $("composer-hint").textContent = "Kairos GPT can make mistakes. Double-check important details.";
     try {
       const configResponse = await fetch("/api/config");
       const config = await configResponse.json();
